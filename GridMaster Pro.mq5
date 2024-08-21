@@ -10,8 +10,9 @@
 
 //--- Input parameters
 input double LotSize = 0.1;
-input double GridDistance = 50; // Distance between orders in points
-input int MaxOrders = 10;       // Maximum number of orders in the grid
+input int MaxOrders = 10;         // Maximum number of orders in the grid
+input int ATRPeriod = 14;         // ATR period for dynamic grid adjustment
+input double ATRMultiplier = 1.5; // Multiplier for ATR to calculate grid distance
 
 //--- Global variables
 double gridLevels[];
@@ -98,11 +99,22 @@ void OnDeinit(const int reason)
 }
 
 //+------------------------------------------------------------------+
+//| Function to calculate dynamic grid distance                      |
+//+------------------------------------------------------------------+
+double CalculateDynamicGridDistance()
+{
+    //--- Correct iATR usage
+    double atrValue = iATR(_Symbol, PERIOD_CURRENT, ATRPeriod);
+    return atrValue * ATRMultiplier;
+}
+
+//+------------------------------------------------------------------+
 //| Tick function                                                    |
 //+------------------------------------------------------------------+
 void OnTick()
 {
     double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    double gridDistance = CalculateDynamicGridDistance();
 
     //--- Place the first order
     if (ordersCount == 0)
@@ -117,7 +129,7 @@ void OnTick()
     //--- Place grid orders
     for (int i = 0; i < ordersCount && i < MaxOrders; i++)
     {
-        if (lastPrice > gridLevels[i] + GridDistance * _Point)
+        if (lastPrice > gridLevels[i] + gridDistance * _Point)
         {
             gridLevels[i + 1] = lastPrice;
             if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, 0, 0))
