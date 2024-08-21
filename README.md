@@ -34,3 +34,23 @@ GridMaster Pro is a MetaTrader 5 Expert Advisor (EA) that implements a grid trad
 input double LotSize = 0.1;
 input double GridDistance = 50; // Distance between orders in points
 input int MaxOrders = 10; // Maximum number of orders in the grid
+
+## Contribution
+
+Contributions are welcome! Please see the [Contribution Guide](CONTRIBUTING.md) for details on how to get involved.
+
+## Disclaimer and Risk Warnings
+
+Trading any financial market involves risk. All forms of trading carry a high level of risk, so you should only speculate with money you can afford to lose. You can lose more than your initial deposit and stake. Please ensure your chosen method matches your investment objectives, familiarize yourself with the risks involved, and if necessary, seek independent advice.
+
+### NFA and CFTC Required Disclaimers
+
+Trading in the Foreign Exchange market, Futures Market, Options, or the Stock Market is a challenging opportunity where above-average returns are available for educated and experienced investors who are willing to take above-average risks. However, before deciding to participate in Foreign Exchange (FX) trading, or in Trading Futures, Options, or stocks, you should carefully consider your investment objectives, level of experience, and risk appetite.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+[Sajid Mahamud](https://www.mql5.com/en/users/sajidmahamud835)
