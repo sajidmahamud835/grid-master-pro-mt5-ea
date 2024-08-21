@@ -33,7 +33,7 @@ GridMaster Pro is a MetaTrader 5 Expert Advisor (EA) that implements a grid trad
 ```mql5
 input double LotSize = 0.1;
 input double GridDistance = 50; // Distance between orders in points
-input int MaxOrders = 10; // Maximum number of orders in the grid
+input int MaxOrders = 10; // Maximum number of orders in the grid```
 
 ## Contribution
 
