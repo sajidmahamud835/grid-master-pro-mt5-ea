@@ -15,10 +15,12 @@ input int ATRPeriod = 14;         // ATR period for dynamic grid adjustment
 input double ATRMultiplier = 1.5; // Multiplier for ATR to calculate grid distance
 
 input bool UseTakeProfit = true;  // Enable/Disable Take Profit
-input double DefaultTP = 10.0;    // Default Take Profit in points
+input double DefaultTP = 100.0;    // Default Take Profit in points
 
 input bool UseStopLoss = true;    // Enable/Disable Stop Loss
-input double DefaultSL = 5.0;     // Default Stop Loss in points
+input double DefaultSL = 500.0;     // Default Stop Loss in points
+
+
 
 //--- Global variables
 double gridLevels[];
@@ -192,6 +194,7 @@ void OnTick()
     }
 }
 
+
 //+------------------------------------------------------------------+
 //| Function to open an order                                        |
 //+------------------------------------------------------------------+
@@ -201,6 +204,17 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     if (!SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE, tradeAllowed) || tradeAllowed != SYMBOL_TRADE_MODE_FULL)
     {
         string errorMsg = "Trading not allowed for symbol: " + _Symbol;
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
+        return false;
+    }
+
+    // Check if prices are available
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    if (bid == 0.0 || ask == 0.0)
+    {
+        string errorMsg = "No prices available for symbol: " + _Symbol;
         Print(errorMsg);
         WriteLog(errorLogFile, errorMsg);
         return false;
@@ -218,14 +232,14 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     request.price = price;
     request.sl = sl;
     request.tp = tp;
-    request.deviation = 3;
+    request.deviation = 50;  // Increase deviation to handle rapid price changes
     request.magic = 0;
     request.comment = "Grid Order";
     request.type_filling = ORDER_FILLING_IOC;
 
     const int maxRetries = 5;
     int retries = 0;
-    int waitTime = 1000;
+    int waitTime = 2000;  // Increased initial wait time to 2 seconds
 
     while (retries < maxRetries)
     {
