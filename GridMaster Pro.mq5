@@ -14,12 +14,6 @@ input int MaxOrders = 10;         // Maximum number of orders in the grid
 input int ATRPeriod = 14;         // ATR period for dynamic grid adjustment
 input double ATRMultiplier = 1.5; // Multiplier for ATR to calculate grid distance
 
-input bool UseTakeProfit = true;  // Enable/Disable Take Profit
-input double DefaultTP = 10.0;    // Default Take Profit in points
-
-input bool UseStopLoss = true;    // Enable/Disable Stop Loss
-input double DefaultSL = 5.0;     // Default Stop Loss in points
-
 //--- Global variables
 double gridLevels[];
 int ordersCount = 0;
@@ -131,26 +125,13 @@ void OnTick()
 {
     double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double gridDistance = CalculateDynamicGridDistance();
-    
-    //--- Determine Take Profit
-    double tp = 0;
-    if (UseTakeProfit)
-    {
-        tp = lastPrice + DefaultTP * _Point;
-    }
-
-    //--- Determine Stop Loss
-    double sl = 0;
-    if (UseStopLoss)
-    {
-            sl = lastPrice - DefaultSL * _Point;
-    }
+    double tp = lastPrice + gridDistance; 
 
     //--- Place the first order
     if (ordersCount == 0)
     {
         gridLevels[0] = lastPrice;
-        if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp))
+        if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, 0, tp))
         {
             ordersCount++;
         }
@@ -162,7 +143,7 @@ void OnTick()
         if (lastPrice > gridLevels[i] + gridDistance * _Point)
         {
             gridLevels[i + 1] = lastPrice;
-            if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp))
+            if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, 0, tp))
             {
                 ordersCount++;
             }
