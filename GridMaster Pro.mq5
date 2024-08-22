@@ -14,9 +14,20 @@ input int MaxOrders = 10;         // Maximum number of orders in the grid
 input int ATRPeriod = 14;         // ATR period for dynamic grid adjustment
 input double ATRMultiplier = 1.5; // Multiplier for ATR to calculate grid distance
 
+input bool UseTakeProfit = true;  // Enable/Disable Take Profit
+input double DefaultTP = 10.0;    // Default Take Profit in points
+
+input bool UseStopLoss = true;    // Enable/Disable Stop Loss
+input double DefaultSL = 5.0;     // Default Stop Loss in points
+
 //--- Global variables
 double gridLevels[];
 int ordersCount = 0;
+
+//--- Log file paths
+string errorLogFile = "GridMasterPro_ErrorLog.txt";
+string successLogFile = "GridMasterPro_SuccessLog.txt";
+string orderLogFile = "GridMasterPro_OrderLog.txt";
 
 //+------------------------------------------------------------------+
 //| Error description function                                       |
@@ -89,6 +100,25 @@ void OnDeinit(const int reason)
 }
 
 //+------------------------------------------------------------------+
+//| Function to write logs                                           |
+//+------------------------------------------------------------------+
+void WriteLog(string logFile, string message)
+{
+    int handle = FileOpen(logFile, FILE_READ | FILE_WRITE | FILE_SHARE_READ | FILE_SHARE_WRITE);
+    if (handle != INVALID_HANDLE)
+    {
+        // Move the file pointer to the end for appending
+        FileSeek(handle, 0, SEEK_END);
+        FileWrite(handle, message);
+        FileClose(handle);
+    }
+    else
+    {
+        Print("Failed to open log file: " + logFile);
+    }
+}
+
+//+------------------------------------------------------------------+
 //| Function to calculate dynamic grid distance                      |
 //+------------------------------------------------------------------+
 double CalculateDynamicGridDistance()
@@ -96,25 +126,23 @@ double CalculateDynamicGridDistance()
     int atrHandle = iATR(_Symbol, PERIOD_CURRENT, ATRPeriod);
     if (atrHandle == INVALID_HANDLE)
     {
-        Print("Failed to create ATR handle. Error code: ", GetLastError());
+        string errorMsg = "Failed to create ATR handle. Error code: " + IntegerToString(GetLastError());
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
         return 0;
     }
 
-    //--- Variable to hold the ATR value
     double atrValue[];
-
-    //--- Copy the ATR value
     if (CopyBuffer(atrHandle, 0, 0, 1, atrValue) <= 0)
     {
-        Print("Failed to copy ATR values. Error code: ", GetLastError());
+        string errorMsg = "Failed to copy ATR values. Error code: " + IntegerToString(GetLastError());
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
         IndicatorRelease(atrHandle);
         return 0;
     }
 
-    //--- Release the handle to free up memory
     IndicatorRelease(atrHandle);
-
-    //--- Return the calculated grid distance
     return atrValue[0] * ATRMultiplier;
 }
 
@@ -125,13 +153,26 @@ void OnTick()
 {
     double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double gridDistance = CalculateDynamicGridDistance();
-    double tp = lastPrice + gridDistance; 
+
+    //--- Determine Take Profit
+    double tp = 0;
+    if (UseTakeProfit)
+    {
+        tp = lastPrice + DefaultTP * _Point;
+    }
+
+    //--- Determine Stop Loss
+    double sl = 0;
+    if (UseStopLoss)
+    {
+        sl = lastPrice - DefaultSL * _Point;
+    }
 
     //--- Place the first order
     if (ordersCount == 0)
     {
         gridLevels[0] = lastPrice;
-        if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, 0, tp))
+        if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp))
         {
             ordersCount++;
         }
@@ -143,7 +184,7 @@ void OnTick()
         if (lastPrice > gridLevels[i] + gridDistance * _Point)
         {
             gridLevels[i + 1] = lastPrice;
-            if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, 0, tp))
+            if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp))
             {
                 ordersCount++;
             }
@@ -156,11 +197,12 @@ void OnTick()
 //+------------------------------------------------------------------+
 bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double sl, double tp)
 {
-    // Ensure the symbol is tradable
     long tradeAllowed;
     if (!SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE, tradeAllowed) || tradeAllowed != SYMBOL_TRADE_MODE_FULL)
     {
-        Print("Trading not allowed for symbol: ", _Symbol);
+        string errorMsg = "Trading not allowed for symbol: " + _Symbol;
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
         return false;
     }
 
@@ -169,7 +211,6 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     ZeroMemory(request);
     ZeroMemory(result);
 
-    // Fill the request structure
     request.action = TRADE_ACTION_DEAL;
     request.symbol = _Symbol;
     request.volume = lotSize;
@@ -182,38 +223,44 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     request.comment = "Grid Order";
     request.type_filling = ORDER_FILLING_IOC;
 
-    // Retry logic with backoff strategy
     const int maxRetries = 5;
     int retries = 0;
-    int waitTime = 1000; // Start with 1-second wait
+    int waitTime = 1000;
 
     while (retries < maxRetries)
     {
         if (!OrderSend(request, result))
         {
             uint retcode = result.retcode;
-            if (retcode == 10004 || retcode == 10021) // 10021 = No quotes
+            if (retcode == 10004 || retcode == 10021)
             {
                 retries++;
-                Print("OrderSend failed (reason: ", ErrorDescription(retcode), "), retrying... Attempt ", retries);
+                string retryMsg = "OrderSend failed (reason: " + ErrorDescription(retcode) + "), retrying... Attempt " + IntegerToString(retries);
+                Print(retryMsg);
+                WriteLog(errorLogFile, retryMsg);
                 Sleep(waitTime);
-                waitTime *= 2; // Exponential backoff
+                waitTime *= 2;
             }
             else
             {
-                Print("OrderSend failed: ", retcode, ". Reason: ", ErrorDescription(retcode));
+                string errorMsg = "OrderSend failed: " + IntegerToString(retcode) + ". Reason: " + ErrorDescription(retcode);
+                Print(errorMsg);
+                WriteLog(errorLogFile, errorMsg);
                 return false;
             }
         }
         else
         {
-            Print("Order placed successfully: ", result.order);
+            string successMsg = "Order placed successfully. Order Ticket: " + IntegerToString(result.order) + ". Type: " + IntegerToString(orderType);
+            Print(successMsg);
+            WriteLog(successLogFile, successMsg);
+            WriteLog(orderLogFile, "Order Ticket: " + IntegerToString(result.order) + " | Type: " + IntegerToString(orderType) + " | Price: " + DoubleToString(price, _Digits) + " | SL: " + DoubleToString(sl, _Digits) + " | TP: " + DoubleToString(tp, _Digits));
             return true;
         }
     }
 
-    Print("OrderSend failed after maximum retries");
+    string finalErrorMsg = "OrderSend failed after max retries. Last error code: " + IntegerToString(GetLastError()) + ". Reason: " + ErrorDescription(GetLastError());
+    Print(finalErrorMsg);
+    WriteLog(errorLogFile, finalErrorMsg);
     return false;
 }
-
-//+------------------------------------------------------------------+
