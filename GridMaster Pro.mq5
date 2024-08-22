@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, Sajid."
 #property link      "https://www.mql5.com/en/users/sajidmahamud835"
-#property version   "1.02"
+#property version   "1.03"
 #property strict
 
 //--- Input parameters
@@ -20,8 +20,6 @@ input double DefaultTP = 100.0;    // Default Take Profit in points
 input bool UseStopLoss = true;    // Enable/Disable Stop Loss
 input double DefaultSL = 500.0;     // Default Stop Loss in points
 
-
-
 //--- Global variables
 double gridLevels[];
 int ordersCount = 0;
@@ -30,6 +28,12 @@ int ordersCount = 0;
 string errorLogFile = "GridMasterPro_ErrorLog.txt";
 string successLogFile = "GridMasterPro_SuccessLog.txt";
 string orderLogFile = "GridMasterPro_OrderLog.txt";
+
+//--- Function to generate a dynamic magic number based on the symbol
+int GenerateMagicNumber()
+{
+    return StringToInteger(StringSubstr(_Symbol, 0, 4) + StringSubstr(_Symbol, 4, 2));
+}
 
 //+------------------------------------------------------------------+
 //| Error description function                                       |
@@ -83,6 +87,7 @@ string ErrorDescription(int code)
     }
 }
 
+
 //+------------------------------------------------------------------+
 //| Initialization function                                          |
 //+------------------------------------------------------------------+
@@ -111,7 +116,7 @@ void WriteLog(string logFile, string message)
     {
         // Move the file pointer to the end for appending
         FileSeek(handle, 0, SEEK_END);
-        FileWrite(handle, message);
+        FileWrite(handle, "[" + TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES) + "] " + message);
         FileClose(handle);
     }
     else
@@ -149,6 +154,24 @@ double CalculateDynamicGridDistance()
 }
 
 //+------------------------------------------------------------------+
+//| Function to determine take profit and stop loss                  |
+//+------------------------------------------------------------------+
+void DetermineTPAndSL(double& tp, double& sl, double lastPrice)
+{
+    tp = 0;
+    if (UseTakeProfit)
+    {
+        tp = lastPrice + DefaultTP * _Point;
+    }
+
+    sl = 0;
+    if (UseStopLoss)
+    {
+        sl = lastPrice - DefaultSL * _Point;
+    }
+}
+
+//+------------------------------------------------------------------+
 //| Tick function                                                    |
 //+------------------------------------------------------------------+
 void OnTick()
@@ -156,19 +179,8 @@ void OnTick()
     double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double gridDistance = CalculateDynamicGridDistance();
 
-    //--- Determine Take Profit
-    double tp = 0;
-    if (UseTakeProfit)
-    {
-        tp = lastPrice + DefaultTP * _Point;
-    }
-
-    //--- Determine Stop Loss
-    double sl = 0;
-    if (UseStopLoss)
-    {
-        sl = lastPrice - DefaultSL * _Point;
-    }
+    double tp, sl;
+    DetermineTPAndSL(tp, sl, lastPrice);
 
     //--- Place the first order
     if (ordersCount == 0)
@@ -194,7 +206,6 @@ void OnTick()
     }
 }
 
-
 //+------------------------------------------------------------------+
 //| Function to open an order                                        |
 //+------------------------------------------------------------------+
@@ -209,7 +220,6 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
         return false;
     }
 
-    // Check if prices are available
     double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
     if (bid == 0.0 || ask == 0.0)
@@ -232,14 +242,14 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     request.price = price;
     request.sl = sl;
     request.tp = tp;
-    request.deviation = 50;  // Increase deviation to handle rapid price changes
-    request.magic = 0;
+    request.deviation = 50;
+    request.magic = GenerateMagicNumber();
     request.comment = "Grid Order";
     request.type_filling = ORDER_FILLING_IOC;
 
     const int maxRetries = 5;
     int retries = 0;
-    int waitTime = 2000;  // Increased initial wait time to 2 seconds
+    int waitTime = 2000;
 
     while (retries < maxRetries)
     {
