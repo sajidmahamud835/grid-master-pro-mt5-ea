@@ -26,55 +26,87 @@ string ErrorDescription(int code)
     switch (code)
     {
     case 10004:
-        return "Trade server busy";
-    case 10006:
-        return "Unsupported by trade server";
-    case 10007:
-        return "Account disabled";
-    case 10008:
-        return "Invalid account";
-    case 10009:
-        return "Trade timeout";
-    case 10010:
-        return "Invalid price";
-    case 10011:
-        return "Invalid stops";
-    case 10012:
-        return "Invalid trade volume";
-    case 10013:
-        return "Market is closed";
-    case 10014:
-        return "Trade is prohibited";
-    case 10015:
-        return "Insufficient funds";
-    case 10016:
-        return "Price changed";
-    case 10017:
-        return "No quote";
-    case 10018:
         return "Requote";
-    case 10019:
-        return "Order is locked";
-    case 10020:
-        return "Long positions only allowed";
-    case 10021:
-        return "Too many requests";
-    case 10022:
-        return "Trade modify denied";
-    case 10023:
-        return "Trade context busy";
-    case 10024:
-        return "Order rejected";
-    case 10025:
+    case 10006:
+        return "Request rejected";
+    case 10007:
+        return "Request canceled by trader";
+    case 10008:
+        return "Order placed";
+    case 10009:
+        return "Request completed";
+    case 10010:
+        return "Only part of the request was completed";
+    case 10011:
+        return "Request processing error";
+    case 10012:
+        return "Request canceled by timeout";
+    case 10013:
+        return "Invalid request";
+    case 10014:
+        return "Invalid volume in the request";
+    case 10015:
+        return "Invalid price in the request";
+    case 10016:
+        return "Invalid stops in the request";
+    case 10017:
         return "Trade is disabled";
+    case 10018:
+        return "Market is closed";
+    case 10019:
+        return "There is not enough money to complete the request";
+    case 10020:
+        return "Prices changed";
+    case 10021:
+        return "There are no quotes to process the request";
+    case 10022:
+        return "Invalid order expiration date in the request";
+    case 10023:
+        return "Order state changed";
+    case 10024:
+        return "Too frequent requests";
+    case 10025:
+        return "No changes in request";
     case 10026:
-        return "Not enough money";
+        return "Autotrading disabled by server";
     case 10027:
-        return "Too many pending orders";
+        return "Autotrading disabled by client terminal";
     case 10028:
-        return "No right for operation";
+        return "Request locked for processing";
     case 10029:
-        return "Operation timeout";
+        return "Order or position frozen";
+    case 10030:
+        return "Invalid order filling type";
+    case 10031:
+        return "No connection with the trade server";
+    case 10032:
+        return "Operation is allowed only for live accounts";
+    case 10033:
+        return "The number of pending orders has reached the limit";
+    case 10034:
+        return "The volume of orders and positions for the symbol has reached the limit";
+    case 10035:
+        return "Incorrect or prohibited order type";
+    case 10036:
+        return "Position with the specified POSITION_IDENTIFIER has already been closed";
+    case 10038:
+        return "A close volume exceeds the current position volume";
+    case 10039:
+        return "A close order already exists for a specified position";
+    case 10040:
+        return "The number of open positions simultaneously present on an account can be limited by the server settings";
+    case 10041:
+        return "The pending order activation request is rejected, the order is canceled";
+    case 10042:
+        return "The request is rejected, because the 'Only long positions are allowed' rule is set for the symbol";
+    case 10043:
+        return "The request is rejected, because the 'Only short positions are allowed' rule is set for the symbol";
+    case 10044:
+        return "The request is rejected, because the 'Only position closing is allowed' rule is set for the symbol";
+    case 10045:
+        return "The request is rejected, because 'Position closing is allowed only by FIFO rule' flag is set for the trading account";
+    case 10046:
+        return "The request is rejected, because the 'Opposite positions on a single symbol are disabled' rule is set for the trading account";
     default:
         return "Unknown error";
     }
