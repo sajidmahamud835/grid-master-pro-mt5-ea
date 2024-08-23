@@ -22,6 +22,11 @@ input bool UseStopLoss = true;    // Enable/Disable Stop Loss
 input double DefaultSL = 500.0;   // Default Stop Loss in points
 
 input double VolatilityThreshold = 20.0; // ATR threshold for volatility
+
+input bool UseTrailingStop = true;    // Enable/Disable Trailing Stop
+input double TrailingStopPoints = 50; // Trailing Stop in points
+
+
 //--- Global variables
 double gridLevels[];
 int ordersCount = 0;
@@ -231,15 +236,23 @@ bool IsMarketVolatile()
 //+------------------------------------------------------------------+
 //| Function to determine take profit and stop loss                  |
 //+------------------------------------------------------------------+
-void DetermineTPAndSL(double& tp, double& sl, double lastPrice) {
+void DetermineTPAndSL(double& tp, double& sl, double lastPrice, double openPrice) {
     tp = 0;
     if (UseTakeProfit) {
         tp = lastPrice + DefaultTP * _Point;
     }
 
-    sl = 0;
     if (UseStopLoss) {
-        sl = lastPrice - DefaultSL * _Point;
+        if (UseTrailingStop) {
+            double newSL = lastPrice - TrailingStopPoints * _Point;
+            if (newSL > openPrice) {
+                sl = newSL;
+            } else {
+                sl = openPrice - DefaultSL * _Point; // Use the default stop loss if trailing is not activated
+            }
+        } else {
+            sl = openPrice - DefaultSL * _Point;
+        }
     }
 }
 
@@ -250,10 +263,24 @@ void OnTick() {
     double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double gridDistance = CalculateDynamicGridDistance();
 
-    double tp, sl;
-    DetermineTPAndSL(tp, sl, lastPrice);
+    double tp = 0, sl = 0;
 
-    //--- Place the first order
+    // Check existing positions and adjust the trailing stop
+    for (int i = 0; i < PositionsTotal(); i++) {
+        if (PositionSelect(_Symbol)) {
+            ulong ticket = PositionGetInteger(POSITION_TICKET);  // Retrieve the correct ticket number
+            double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);  // Getting open price
+            DetermineTPAndSL(tp, sl, lastPrice, openPrice);
+            if (PositionGetDouble(POSITION_SL) != sl) {  // Checking stop loss
+                ModifyOrder(ticket, openPrice, sl, tp);
+            }
+        } else {
+            // Handle position selection failure
+            Print("Failed to select position for symbol: ", _Symbol);
+        }
+    }
+
+    // Place the first order
     if (ordersCount == 0) {
         gridLevels[0] = lastPrice;
         if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp)) {
@@ -261,7 +288,7 @@ void OnTick() {
         }
     }
 
-    //--- Place grid orders
+    // Place grid orders
     for (int i = 0; i < ordersCount && i < MaxOrders; i++) {
         if (lastPrice > gridLevels[i] + gridDistance * _Point) {
             gridLevels[i + 1] = lastPrice;
@@ -271,6 +298,8 @@ void OnTick() {
         }
     }
 }
+
+
 
 //+------------------------------------------------------------------+
 //| Function to open an order                                        |
@@ -334,4 +363,35 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     WriteLog(errorLogFile, errorMsg);
 
     return false;
+}
+
+//+------------------------------------------------------------------+
+//| Function to modify an order                                        |
+//+------------------------------------------------------------------+
+
+bool ModifyOrder(ulong ticket, double price, double sl, double tp) {
+    MqlTradeRequest request;
+    MqlTradeResult result;
+    ZeroMemory(request);
+    ZeroMemory(result);
+
+    request.action = TRADE_ACTION_SLTP;
+    request.symbol = _Symbol;
+    request.sl = sl;
+    request.tp = tp;
+    request.position = ticket;  // Correctly use 'ticket' to reference the order/position
+
+    request.magic = GenerateMagicNumber();
+    request.comment = "Modify Order";
+
+    if (OrderSend(request, result)) {
+        WriteLog(successLogFile, "Order modified successfully. Order ticket: " + IntegerToString(result.order));
+        return true;
+    } else {
+        int errorCode = GetLastError();
+        string errorMsg = "Order modification failed. Error code: " + IntegerToString(errorCode) + ". " + ErrorDescription(errorCode);
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
+        return false;
+    }
 }
