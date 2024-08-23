@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, Sajid."
 #property link      "https://www.mql5.com/en/users/sajidmahamud835"
-#property version   "1.04"
+#property version   "1.03"
 #property strict
 
 //--- Input parameters
@@ -13,15 +13,12 @@ input double LotSize = 0.1;
 input int MaxOrders = 10;         // Maximum number of orders in the grid
 input int ATRPeriod = 14;         // ATR period for dynamic grid adjustment
 input double ATRMultiplier = 1.5; // Multiplier for ATR to calculate grid distance
-input int TrendPeriod = 50;       // Period for detecting market trend
 
 input bool UseTakeProfit = true;  // Enable/Disable Take Profit
-input double DefaultTP = 100.0;    // Default Take Profit in points
+input double DefaultTP = 100.0;   // Default Take Profit in points
 
 input bool UseStopLoss = true;    // Enable/Disable Stop Loss
-input double DefaultSL = 500.0;     // Default Stop Loss in points
-
-input double VolatilityThreshold = 20.0; // ATR threshold for volatility
+input double DefaultSL = 500.0;   // Default Stop Loss in points
 
 //--- Global variables
 double gridLevels[];
@@ -33,18 +30,15 @@ string successLogFile = "GridMasterPro_SuccessLog.txt";
 string orderLogFile = "GridMasterPro_OrderLog.txt";
 
 //--- Function to generate a dynamic magic number based on the symbol
-int GenerateMagicNumber()
-{
+int GenerateMagicNumber() {
     return StringToInteger(StringSubstr(_Symbol, 0, 4) + StringSubstr(_Symbol, 4, 2));
 }
 
 //+------------------------------------------------------------------+
 //| Error description function                                       |
 //+------------------------------------------------------------------+
-string ErrorDescription(int code)
-{
-    switch (code)
-    {
+string ErrorDescription(int code) {
+    switch (code) {
         case 10004: return "Requote";
         case 10006: return "Request rejected";
         case 10007: return "Request canceled by trader";
@@ -93,8 +87,7 @@ string ErrorDescription(int code)
 //+------------------------------------------------------------------+
 //| Initialization function                                          |
 //+------------------------------------------------------------------+
-int OnInit()
-{
+int OnInit() {
     //--- Initialize grid levels array size
     ArrayResize(gridLevels, MaxOrders);
     return INIT_SUCCEEDED;
@@ -103,26 +96,21 @@ int OnInit()
 //+------------------------------------------------------------------+
 //| Deinitialization function                                        |
 //+------------------------------------------------------------------+
-void OnDeinit(const int reason)
-{
+void OnDeinit(const int reason) {
     //--- Cleanup code if needed
 }
 
 //+------------------------------------------------------------------+
 //| Function to write logs                                           |
 //+------------------------------------------------------------------+
-void WriteLog(string logFile, string message)
-{
+void WriteLog(string logFile, string message) {
     int handle = FileOpen(logFile, FILE_READ | FILE_WRITE | FILE_SHARE_READ | FILE_SHARE_WRITE);
-    if (handle != INVALID_HANDLE)
-    {
+    if (handle != INVALID_HANDLE) {
         // Move the file pointer to the end for appending
         FileSeek(handle, 0, SEEK_END);
         FileWrite(handle, "[" + TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES) + "] " + message);
         FileClose(handle);
-    }
-    else
-    {
+    } else {
         Print("Failed to open log file: " + logFile);
     }
 }
@@ -130,11 +118,9 @@ void WriteLog(string logFile, string message)
 //+------------------------------------------------------------------+
 //| Function to calculate dynamic grid distance                      |
 //+------------------------------------------------------------------+
-double CalculateDynamicGridDistance()
-{
+double CalculateDynamicGridDistance() {
     int atrHandle = iATR(_Symbol, PERIOD_CURRENT, ATRPeriod);
-    if (atrHandle == INVALID_HANDLE)
-    {
+    if (atrHandle == INVALID_HANDLE) {
         string errorMsg = "Failed to create ATR handle. Error code: " + IntegerToString(GetLastError());
         Print(errorMsg);
         WriteLog(errorLogFile, errorMsg);
@@ -142,9 +128,7 @@ double CalculateDynamicGridDistance()
     }
 
     double atrValue[];
-    int copied = CopyBuffer(atrHandle, 0, 0, 1, atrValue);
-    if (copied <= 0)
-    {
+    if (CopyBuffer(atrHandle, 0, 0, 1, atrValue) <= 0) {
         string errorMsg = "Failed to copy ATR values. Error code: " + IntegerToString(GetLastError());
         Print(errorMsg);
         WriteLog(errorLogFile, errorMsg);
@@ -157,79 +141,16 @@ double CalculateDynamicGridDistance()
 }
 
 //+------------------------------------------------------------------+
-//| Function to detect market trend                                  |
-//+------------------------------------------------------------------+
-bool IsMarketTrending()
-{
-    int maHandle = iMA(_Symbol, PERIOD_CURRENT, TrendPeriod, 0, MODE_SMA, PRICE_CLOSE);
-    if (maHandle == INVALID_HANDLE)
-    {
-        string errorMsg = "Failed to create MA handle. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        return false;
-    }
-
-    double maValue[];
-    int copied = CopyBuffer(maHandle, 0, 0, 1, maValue);
-    if (copied <= 0)
-    {
-        string errorMsg = "Failed to copy MA values. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        IndicatorRelease(maHandle);
-        return false;
-    }
-
-    IndicatorRelease(maHandle);
-    double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    return (lastPrice > maValue[0] || lastPrice < maValue[0]);
-}
-
-//+------------------------------------------------------------------+
-//| Function to detect market volatility                             |
-//+------------------------------------------------------------------+
-bool IsMarketVolatile()
-{
-    int atrHandle = iATR(_Symbol, PERIOD_CURRENT, ATRPeriod);
-    if (atrHandle == INVALID_HANDLE)
-    {
-        string errorMsg = "Failed to create ATR handle. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        return false;
-    }
-
-    double atrValue[];
-    int copied = CopyBuffer(atrHandle, 0, 0, 1, atrValue);
-    if (copied <= 0)
-    {
-        string errorMsg = "Failed to copy ATR values. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        IndicatorRelease(atrHandle);
-        return false;
-    }
-
-    IndicatorRelease(atrHandle);
-    return (atrValue[0] > VolatilityThreshold * _Point);
-}
-
-
-//+------------------------------------------------------------------+
 //| Function to determine take profit and stop loss                  |
 //+------------------------------------------------------------------+
-void DetermineTPAndSL(double& tp, double& sl, double lastPrice)
-{
+void DetermineTPAndSL(double& tp, double& sl, double lastPrice) {
     tp = 0;
-    if (UseTakeProfit)
-    {
+    if (UseTakeProfit) {
         tp = lastPrice + DefaultTP * _Point;
     }
 
     sl = 0;
-    if (UseStopLoss)
-    {
+    if (UseStopLoss) {
         sl = lastPrice - DefaultSL * _Point;
     }
 }
@@ -237,42 +158,26 @@ void DetermineTPAndSL(double& tp, double& sl, double lastPrice)
 //+------------------------------------------------------------------+
 //| Tick function                                                    |
 //+------------------------------------------------------------------+
-void OnTick()
-{
+void OnTick() {
     double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double gridDistance = CalculateDynamicGridDistance();
 
     double tp, sl;
     DetermineTPAndSL(tp, sl, lastPrice);
 
-    //--- Check market conditions before placing orders
-    bool isTrending = IsMarketTrending();
-    bool isVolatile = IsMarketVolatile();
-
-    if (!isTrending || isVolatile)
-    {
-        // Avoid placing orders if market is not trending or too volatile
-        return;
-    }
-
     //--- Place the first order
-    if (ordersCount == 0)
-    {
+    if (ordersCount == 0) {
         gridLevels[0] = lastPrice;
-        if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp))
-        {
+        if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp)) {
             ordersCount++;
         }
     }
 
     //--- Place grid orders
-    for (int i = 0; i < ordersCount && i < MaxOrders; i++)
-    {
-        if (lastPrice > gridLevels[i] + gridDistance * _Point)
-        {
+    for (int i = 0; i < ordersCount && i < MaxOrders; i++) {
+        if (lastPrice > gridLevels[i] + gridDistance * _Point) {
             gridLevels[i + 1] = lastPrice;
-            if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp))
-            {
+            if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp)) {
                 ordersCount++;
             }
         }
@@ -282,11 +187,9 @@ void OnTick()
 //+------------------------------------------------------------------+
 //| Function to open an order                                        |
 //+------------------------------------------------------------------+
-bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double sl, double tp)
-{
+bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double sl, double tp) {
     long tradeAllowed;
-    if (!SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE, tradeAllowed) || tradeAllowed != SYMBOL_TRADE_MODE_FULL)
-    {
+    if (!SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE, tradeAllowed) || tradeAllowed != SYMBOL_TRADE_MODE_FULL) {
         string errorMsg = "Trading not allowed for symbol: " + _Symbol;
         Print(errorMsg);
         WriteLog(errorLogFile, errorMsg);
@@ -295,8 +198,7 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
 
     double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    if (bid == 0.0 || ask == 0.0)
-    {
+    if (bid == 0.0 || ask == 0.0) {
         string errorMsg = "No prices available for symbol: " + _Symbol;
         Print(errorMsg);
         WriteLog(errorLogFile, errorMsg);
@@ -324,40 +226,24 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     int retries = 0;
     int waitTime = 2000;
 
-    while (retries < maxRetries)
-    {
-        if (!OrderSend(request, result))
-        {
-            uint retcode = result.retcode;
-            if (retcode == 10004 || retcode == 10021)
-            {
-                retries++;
-                string retryMsg = "OrderSend failed (reason: " + ErrorDescription(retcode) + "), retrying... Attempt " + IntegerToString(retries);
-                Print(retryMsg);
-                WriteLog(errorLogFile, retryMsg);
-                Sleep(waitTime);
-                waitTime *= 2;
-            }
-            else
-            {
-                string errorMsg = "OrderSend failed: " + IntegerToString(retcode) + ". Reason: " + ErrorDescription(retcode);
-                Print(errorMsg);
-                WriteLog(errorLogFile, errorMsg);
-                return false;
-            }
-        }
-        else
-        {
-            string successMsg = "Order placed successfully. Order Ticket: " + IntegerToString(result.order) + ". Type: " + IntegerToString(orderType);
-            Print(successMsg);
-            WriteLog(successLogFile, successMsg);
-            WriteLog(orderLogFile, "Order Ticket: " + IntegerToString(result.order) + " | Type: " + IntegerToString(orderType) + " | Price: " + DoubleToString(price, _Digits) + " | SL: " + DoubleToString(sl, _Digits) + " | TP: " + DoubleToString(tp, _Digits));
+    while (retries < maxRetries) {
+        if (OrderSend(request, result)) {
+            WriteLog(successLogFile, "Order placed successfully. Order ticket: " + IntegerToString(result.order));
             return true;
+        } else {
+            int errorCode = GetLastError();
+            string errorMsg = "Order placement failed. Error code: " + IntegerToString(errorCode) + ". " + ErrorDescription(errorCode);
+            Print(errorMsg);
+            WriteLog(errorLogFile, errorMsg);
+
+            retries++;
+            Sleep(waitTime);
         }
     }
 
-    string finalErrorMsg = "OrderSend failed after max retries. Last error code: " + IntegerToString(GetLastError()) + ". Reason: " + ErrorDescription(GetLastError());
-    Print(finalErrorMsg);
-    WriteLog(errorLogFile, finalErrorMsg);
+    string errorMsg = "Order placement failed after " + IntegerToString(maxRetries) + " retries.";
+    Print(errorMsg);
+    WriteLog(errorLogFile, errorMsg);
+
     return false;
 }
