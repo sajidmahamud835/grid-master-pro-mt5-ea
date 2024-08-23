@@ -33,8 +33,34 @@ string orderLogFile = "GridMasterPro_OrderLog.txt";
 
 //--- Function to generate a dynamic magic number based on the symbol
 int GenerateMagicNumber() {
-    return StringToInteger(StringSubstr(_Symbol, 0, 4) + StringSubstr(_Symbol, 4, 2));
+    // Ensure _Symbol is not empty
+    if (StringLen(_Symbol) < 6) {
+        Print("Error: Symbol name too short");
+        return -1; // or another error code
+    }
+    
+    // Extract parts of the symbol name
+    string symbolPart1 = StringSubstr(_Symbol, 0, 4); // First 4 characters
+    string symbolPart2 = StringSubstr(_Symbol, 4, 2); // Next 2 characters
+
+    // Validate extracted parts
+    if (StringLen(symbolPart1) != 4 || StringLen(symbolPart2) != 2) {
+        Print("Error: Symbol name format unexpected");
+        return -1; // or another error code
+    }
+
+    // Generate a unique magic number
+    long tempMagicNumber = StringToInteger(symbolPart1 + symbolPart2) + TimeLocal() % 1000;
+
+    // Check if the value fits into an int
+    if (tempMagicNumber > INT_MAX) {
+        Print("Warning: Magic number exceeds int range, adjusting...");
+        tempMagicNumber = INT_MAX;
+    }
+
+    return (int)tempMagicNumber;
 }
+
 
 //+------------------------------------------------------------------+
 //| Error description function                                       |
