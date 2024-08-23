@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, Sajid."
 #property link      "https://www.mql5.com/en/users/sajidmahamud835"
-#property version   "1.03"
+#property version   "1.04"
 #property strict
 
 //--- Input parameters
@@ -13,6 +13,7 @@ input double LotSize = 0.1;
 input int MaxOrders = 10;         // Maximum number of orders in the grid
 input int ATRPeriod = 14;         // ATR period for dynamic grid adjustment
 input double ATRMultiplier = 1.5; // Multiplier for ATR to calculate grid distance
+input int TrendPeriod = 50; // Period for detecting market trend
 
 input bool UseTakeProfit = true;  // Enable/Disable Take Profit
 input double DefaultTP = 100.0;   // Default Take Profit in points
@@ -20,6 +21,7 @@ input double DefaultTP = 100.0;   // Default Take Profit in points
 input bool UseStopLoss = true;    // Enable/Disable Stop Loss
 input double DefaultSL = 500.0;   // Default Stop Loss in points
 
+input double VolatilityThreshold = 20.0; // ATR threshold for volatility
 //--- Global variables
 double gridLevels[];
 int ordersCount = 0;
@@ -139,6 +141,66 @@ double CalculateDynamicGridDistance() {
     IndicatorRelease(atrHandle);
     return atrValue[0] * ATRMultiplier;
 }
+
+//+------------------------------------------------------------------+
+//| Function to detect market trend                                  |
+//+------------------------------------------------------------------+
+bool IsMarketTrending()
+{
+    int maHandle = iMA(_Symbol, PERIOD_CURRENT, TrendPeriod, 0, MODE_SMA, PRICE_CLOSE);
+    if (maHandle == INVALID_HANDLE)
+    {
+        string errorMsg = "Failed to create MA handle. Error code: " + IntegerToString(GetLastError());
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
+        return false;
+    }
+
+    double maValue[];
+    int copied = CopyBuffer(maHandle, 0, 0, 1, maValue);
+    if (copied <= 0)
+    {
+        string errorMsg = "Failed to copy MA values. Error code: " + IntegerToString(GetLastError());
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
+        IndicatorRelease(maHandle);
+        return false;
+    }
+
+    IndicatorRelease(maHandle);
+    double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    return (lastPrice > maValue[0] || lastPrice < maValue[0]);
+}
+
+//+------------------------------------------------------------------+
+//| Function to detect market volatility                             |
+//+------------------------------------------------------------------+
+bool IsMarketVolatile()
+{
+    int atrHandle = iATR(_Symbol, PERIOD_CURRENT, ATRPeriod);
+    if (atrHandle == INVALID_HANDLE)
+    {
+        string errorMsg = "Failed to create ATR handle. Error code: " + IntegerToString(GetLastError());
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
+        return false;
+    }
+
+    double atrValue[];
+    int copied = CopyBuffer(atrHandle, 0, 0, 1, atrValue);
+    if (copied <= 0)
+    {
+        string errorMsg = "Failed to copy ATR values. Error code: " + IntegerToString(GetLastError());
+        Print(errorMsg);
+        WriteLog(errorLogFile, errorMsg);
+        IndicatorRelease(atrHandle);
+        return false;
+    }
+
+    IndicatorRelease(atrHandle);
+    return (atrValue[0] > VolatilityThreshold * _Point);
+}
+
 
 //+------------------------------------------------------------------+
 //| Function to determine take profit and stop loss                  |
