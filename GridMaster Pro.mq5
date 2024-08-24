@@ -256,27 +256,18 @@ void WriteLog(string filename, string message, bool addTimestamp = false) {
 //| Error Description helper function                                |
 //+------------------------------------------------------------------+
 string ErrorDescription(int errorCode) {
-    string errorText;
     switch (errorCode) {
-        case 10004: errorText = "Trade is disabled"; break;
-        case 10006: errorText = "No connection with trade server"; break;
-        case 10007: errorText = "Account is invalid"; break;
-        case 10008: errorText = "Common error"; break;
-        case 10009: errorText = "Trade server is busy"; break;
-        case 10010: errorText = "Old version of the client terminal"; break;
-        case 10011: errorText = "Too many requests"; break;
-        case 10012: errorText = "Request is too frequently sent"; break;
-        case 10013: errorText = "Order send error"; break;
-        case 10014: errorText = "Order modify error"; break;
-        case 10015: errorText = "Order delete error"; break;
-        case 10016: errorText = "Trade context is busy"; break;
-        case 10017: errorText = "Trade timeout"; break;
-        case 10018: errorText = "Trade is forbidden"; break;
-        case 10019: errorText = "Invalid price"; break;
-        case 10020: errorText = "Invalid stops"; break;
-        case 10021: errorText = "Invalid trade volume"; break;
-        case 10022: errorText = "Market is closed"; break;
-        default: errorText = "Unknown error"; break;
+        case 10004: return "Requote";
+        case 10006: return "Request rejected";
+        case 10008: return "Order placed";
+        case 10009: return "Request completed";
+        case 10012: return "Request canceled by timeout";
+        case 10017: return "Trade is disabled";
+        case 10018: return "Market is closed";
+        case 10019: return "Not enough money to complete the request";
+        case 10020: return "Prices changed";
+        case 10021: return "No quotes to process the request";
+        case 10024: return "Too frequent requests";
+        default: return "Unknown error";
     }
-    return errorText;
 }
