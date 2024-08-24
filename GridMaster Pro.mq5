@@ -8,290 +8,82 @@
 #property version   "1.04"
 #property strict
 
-//--- Input parameters
-input double LotSize = 0.1;
-input int MaxOrders = 10;         // Maximum number of orders in the grid
-input int ATRPeriod = 14;         // ATR period for dynamic grid adjustment
-input double ATRMultiplier = 1.5; // Multiplier for ATR to calculate grid distance
-input int TrendPeriod = 50; // Period for detecting market trend
+//--- Input Parameters
+input double LotSize = 0.1;                 // Lot size for each order
+input int MaxOrders = 10;                   // Maximum number of orders in the grid
+input int ATRPeriod = 14;                   // ATR period for dynamic grid adjustment
+input double ATRMultiplier = 1.5;           // Multiplier for ATR to calculate grid distance
+input int TrendPeriod = 50;                 // Period for detecting market trend
 
-input bool UseTakeProfit = true;  // Enable/Disable Take Profit
-input double DefaultTP = 100.0;   // Default Take Profit in points
+input bool UseTakeProfit = true;            // Enable/Disable Take Profit
+input double DefaultTP = 100.0;             // Default Take Profit in points
 
-input bool UseStopLoss = true;    // Enable/Disable Stop Loss
-input double DefaultSL = 500.0;   // Default Stop Loss in points
+input bool UseStopLoss = true;              // Enable/Disable Stop Loss
+input double DefaultSL = 500.0;             // Default Stop Loss in points
 
-input double VolatilityThreshold = 20.0; // ATR threshold for volatility
+input double VolatilityThreshold = 20.0;    // ATR threshold for volatility
 
-input bool UseTrailingStop = true;    // Enable/Disable Trailing Stop
-input double TrailingStopPoints = 50; // Trailing Stop in points
+input bool UseTrailingStop = true;          // Enable/Disable Trailing Stop
+input double TrailingStopPoints = 50;       // Trailing Stop in points
 
+input bool DebugMode = false;               // Enable/Disable Debug Mode
 
-//--- Global variables
-double gridLevels[];
-int ordersCount = 0;
-
-//--- Log file paths
-string errorLogFile = "GridMasterPro_ErrorLog.txt";
-string successLogFile = "GridMasterPro_SuccessLog.txt";
-string orderLogFile = "GridMasterPro_OrderLog.txt";
-
-//--- Function to generate a dynamic magic number based on the symbol
-int GenerateMagicNumber() {
-    // Ensure _Symbol is not empty
-    if (StringLen(_Symbol) < 6) {
-        Print("Error: Symbol name too short");
-        return -1; // or another error code
-    }
-    
-    // Extract parts of the symbol name
-    string symbolPart1 = StringSubstr(_Symbol, 0, 4); // First 4 characters
-    string symbolPart2 = StringSubstr(_Symbol, 4, 2); // Next 2 characters
-
-    // Validate extracted parts
-    if (StringLen(symbolPart1) != 4 || StringLen(symbolPart2) != 2) {
-        Print("Error: Symbol name format unexpected");
-        return -1; // or another error code
-    }
-
-    // Generate a unique magic number
-    long tempMagicNumber = StringToInteger(symbolPart1 + symbolPart2) + TimeLocal() % 1000;
-
-    // Check if the value fits into an int
-    if (tempMagicNumber > INT_MAX) {
-        Print("Warning: Magic number exceeds int range, adjusting...");
-        tempMagicNumber = INT_MAX;
-    }
-
-    return (int)tempMagicNumber;
-}
-
+//--- Global Variables
+double gridLevels[];                        // Array to store grid levels
+int ordersCount = 0;                        // Counter for the number of orders placed
+string successLogFile = "GridMasterPro_success_log.txt"; // Log file for successful actions
+string errorLogFile = "GridMasterPro_error_log.txt";     // Log file for errors
 
 //+------------------------------------------------------------------+
-//| Error description function                                       |
-//+------------------------------------------------------------------+
-string ErrorDescription(int code) {
-    switch (code) {
-        case 10004: return "Requote";
-        case 10006: return "Request rejected";
-        case 10007: return "Request canceled by trader";
-        case 10008: return "Order placed";
-        case 10009: return "Request completed";
-        case 10010: return "Only part of the request was completed";
-        case 10011: return "Request processing error";
-        case 10012: return "Request canceled by timeout";
-        case 10013: return "Invalid request";
-        case 10014: return "Invalid volume in the request";
-        case 10015: return "Invalid price in the request";
-        case 10016: return "Invalid stops in the request";
-        case 10017: return "Trade is disabled";
-        case 10018: return "Market is closed";
-        case 10019: return "Not enough money to complete the request";
-        case 10020: return "Prices changed";
-        case 10021: return "No quotes to process the request";
-        case 10022: return "Invalid order expiration date";
-        case 10023: return "Order state changed";
-        case 10024: return "Too frequent requests";
-        case 10025: return "No changes in request";
-        case 10026: return "Autotrading disabled by server";
-        case 10027: return "Autotrading disabled by client terminal";
-        case 10028: return "Request locked for processing";
-        case 10029: return "Order or position frozen";
-        case 10030: return "Invalid order filling type";
-        case 10031: return "No connection with the trade server";
-        case 10032: return "Operation allowed only for live accounts";
-        case 10033: return "Pending orders limit reached";
-        case 10034: return "Volume of orders/positions for the symbol limit reached";
-        case 10035: return "Incorrect or prohibited order type";
-        case 10036: return "Position with specified POSITION_IDENTIFIER already closed";
-        case 10038: return "Close volume exceeds current position volume";
-        case 10039: return "Close order already exists for specified position";
-        case 10040: return "Open positions limit on account reached by server settings";
-        case 10041: return "Pending order activation rejected, order canceled";
-        case 10042: return "Rejected: 'Only long positions allowed' rule for symbol";
-        case 10043: return "Rejected: 'Only short positions allowed' rule for symbol";
-        case 10044: return "Rejected: 'Only position closing allowed' rule for symbol";
-        case 10045: return "Rejected: 'Position closing allowed only by FIFO rule'";
-        case 10046: return "Rejected: 'Opposite positions disabled' rule for account";
-        default:    return "Unknown error";
-    }
-}
-
-//+------------------------------------------------------------------+
-//| Initialization function                                          |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit() {
-    //--- Initialize grid levels array size
-    ArrayResize(gridLevels, MaxOrders);
+    ArrayResize(gridLevels, MaxOrders);     // Resize grid levels array to the maximum number of orders
     return INIT_SUCCEEDED;
 }
 
 //+------------------------------------------------------------------+
-//| Deinitialization function                                        |
-//+------------------------------------------------------------------+
-void OnDeinit(const int reason) {
-    //--- Cleanup code if needed
-}
-
-//+------------------------------------------------------------------+
-//| Function to write logs                                           |
-//+------------------------------------------------------------------+
-void WriteLog(string logFile, string message) {
-    int handle = FileOpen(logFile, FILE_READ | FILE_WRITE | FILE_SHARE_READ | FILE_SHARE_WRITE);
-    if (handle != INVALID_HANDLE) {
-        // Move the file pointer to the end for appending
-        FileSeek(handle, 0, SEEK_END);
-        FileWrite(handle, "[" + TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES) + "] " + message);
-        FileClose(handle);
-    } else {
-        Print("Failed to open log file: " + logFile);
-    }
-}
-
-//+------------------------------------------------------------------+
-//| Function to calculate dynamic grid distance                      |
-//+------------------------------------------------------------------+
-double CalculateDynamicGridDistance() {
-    int atrHandle = iATR(_Symbol, PERIOD_CURRENT, ATRPeriod);
-    if (atrHandle == INVALID_HANDLE) {
-        string errorMsg = "Failed to create ATR handle. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        return 0;
-    }
-
-    double atrValue[];
-    if (CopyBuffer(atrHandle, 0, 0, 1, atrValue) <= 0) {
-        string errorMsg = "Failed to copy ATR values. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        IndicatorRelease(atrHandle);
-        return 0;
-    }
-
-    IndicatorRelease(atrHandle);
-    return atrValue[0] * ATRMultiplier;
-}
-
-//+------------------------------------------------------------------+
-//| Function to detect market trend                                  |
-//+------------------------------------------------------------------+
-bool IsMarketTrending()
-{
-    int maHandle = iMA(_Symbol, PERIOD_CURRENT, TrendPeriod, 0, MODE_SMA, PRICE_CLOSE);
-    if (maHandle == INVALID_HANDLE)
-    {
-        string errorMsg = "Failed to create MA handle. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        return false;
-    }
-
-    double maValue[];
-    int copied = CopyBuffer(maHandle, 0, 0, 1, maValue);
-    if (copied <= 0)
-    {
-        string errorMsg = "Failed to copy MA values. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        IndicatorRelease(maHandle);
-        return false;
-    }
-
-    IndicatorRelease(maHandle);
-    double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    return (lastPrice > maValue[0] || lastPrice < maValue[0]);
-}
-
-//+------------------------------------------------------------------+
-//| Function to detect market volatility                             |
-//+------------------------------------------------------------------+
-bool IsMarketVolatile()
-{
-    int atrHandle = iATR(_Symbol, PERIOD_CURRENT, ATRPeriod);
-    if (atrHandle == INVALID_HANDLE)
-    {
-        string errorMsg = "Failed to create ATR handle. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        return false;
-    }
-
-    double atrValue[];
-    int copied = CopyBuffer(atrHandle, 0, 0, 1, atrValue);
-    if (copied <= 0)
-    {
-        string errorMsg = "Failed to copy ATR values. Error code: " + IntegerToString(GetLastError());
-        Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
-        IndicatorRelease(atrHandle);
-        return false;
-    }
-
-    IndicatorRelease(atrHandle);
-    return (atrValue[0] > VolatilityThreshold * _Point);
-}
-
-
-//+------------------------------------------------------------------+
-//| Function to determine take profit and stop loss                  |
-//+------------------------------------------------------------------+
-void DetermineTPAndSL(double& tp, double& sl, double lastPrice, double openPrice) {
-    tp = 0;
-    if (UseTakeProfit) {
-        tp = lastPrice + DefaultTP * _Point;
-    }
-
-    if (UseStopLoss) {
-        if (UseTrailingStop) {
-            double newSL = lastPrice - TrailingStopPoints * _Point;
-            if (newSL > openPrice) {
-                sl = newSL;
-            } else {
-                sl = openPrice - DefaultSL * _Point; // Use the default stop loss if trailing is not activated
-            }
-        } else {
-            sl = openPrice - DefaultSL * _Point;
-        }
-    }
-}
-
-//+------------------------------------------------------------------+
-//| Tick function                                                    |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick() {
-    double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    double gridDistance = CalculateDynamicGridDistance();
+    // Ensure the gridLevels array is correctly sized
+    if (ArraySize(gridLevels) != MaxOrders) {
+        ArrayResize(gridLevels, MaxOrders);
+    }
 
-    double tp = 0, sl = 0;
+    double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID); // Current market price
+    double gridDistance = CalculateDynamicGridDistance();     // Calculate dynamic grid distance
+    double tp = EMPTY_VALUE, sl = EMPTY_VALUE;                // Initialize Take Profit and Stop Loss variables
 
-    // Check existing positions and adjust the trailing stop
+    // Modify existing orders' SL and TP if necessary
     for (int i = 0; i < PositionsTotal(); i++) {
         if (PositionSelect(_Symbol)) {
-            ulong ticket = PositionGetInteger(POSITION_TICKET);  // Retrieve the correct ticket number
-            double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);  // Getting open price
-            DetermineTPAndSL(tp, sl, lastPrice, openPrice);
-            if (PositionGetDouble(POSITION_SL) != sl) {  // Checking stop loss
+            ulong ticket = PositionGetInteger(POSITION_TICKET); // Get the position ticket
+            double openPrice = PositionGetDouble(POSITION_PRICE_OPEN); // Get the open price of the position
+            DetermineTPAndSL(tp, sl, lastPrice, openPrice); // Determine Take Profit and Stop Loss levels
+            
+            // Modify the order if the Stop Loss has changed
+            if (PositionGetDouble(POSITION_SL) != sl) {
                 ModifyOrder(ticket, openPrice, sl, tp);
             }
         } else {
-            // Handle position selection failure
             Print("Failed to select position for symbol: ", _Symbol);
+            break;
         }
     }
 
-    // Place the first order
+    // If no orders are placed yet, open the first order
     if (ordersCount == 0) {
-        gridLevels[0] = lastPrice;
+        gridLevels[0] = lastPrice; // Set the first grid level at the current price
         if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp)) {
             ordersCount++;
         }
     }
 
-    // Place grid orders
-    for (int i = 0; i < ordersCount && i < MaxOrders; i++) {
+    // Check if new orders should be placed based on grid distance
+    for (int i = 0; i < ordersCount && i < MaxOrders - 1; i++) {
         if (lastPrice > gridLevels[i] + gridDistance * _Point) {
-            gridLevels[i + 1] = lastPrice;
+            gridLevels[i + 1] = lastPrice; // Set the next grid level
             if (OpenOrder(ORDER_TYPE_BUY, LotSize, lastPrice, sl, tp)) {
                 ordersCount++;
             }
@@ -299,17 +91,45 @@ void OnTick() {
     }
 }
 
-
+//+------------------------------------------------------------------+
+//| Calculate dynamic grid distance based on ATR                     |
+//+------------------------------------------------------------------+
+double CalculateDynamicGridDistance() {
+    double atr = iATR(_Symbol, 0, ATRPeriod); // Get ATR value
+    return atr * ATRMultiplier;              // Calculate grid distance
+}
 
 //+------------------------------------------------------------------+
-//| Function to open an order                                        |
+//| Determine Take Profit and Stop Loss levels                       |
+//+------------------------------------------------------------------+
+void DetermineTPAndSL(double& tp, double& sl, double lastPrice, double openPrice) {
+    tp = EMPTY_VALUE;
+    sl = EMPTY_VALUE;
+
+    if (UseTakeProfit) {
+        tp = lastPrice + DefaultTP * _Point; // Calculate Take Profit level
+    }
+
+    if (UseStopLoss) {
+        if (UseTrailingStop) {
+            double newSL = lastPrice - TrailingStopPoints * _Point; // Calculate Trailing Stop level
+            sl = MathMax(sl, newSL); // Set Stop Loss to the maximum of the existing or new SL
+        } else {
+            sl = openPrice - DefaultSL * _Point; // Set Stop Loss based on the default value
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| Open a new order                                                  |
 //+------------------------------------------------------------------+
 bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double sl, double tp) {
     long tradeAllowed;
+    // Check if trading is allowed for the symbol
     if (!SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE, tradeAllowed) || tradeAllowed != SYMBOL_TRADE_MODE_FULL) {
         string errorMsg = "Trading not allowed for symbol: " + _Symbol;
         Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
+        WriteLog(errorLogFile, errorMsg, true);
         return false;
     }
 
@@ -318,7 +138,7 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     if (bid == 0.0 || ask == 0.0) {
         string errorMsg = "No prices available for symbol: " + _Symbol;
         Print(errorMsg);
-        WriteLog(errorLogFile, errorMsg);
+        WriteLog(errorLogFile, errorMsg, true);
         return false;
     }
 
@@ -327,6 +147,7 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     ZeroMemory(request);
     ZeroMemory(result);
 
+    // Fill the trade request
     request.action = TRADE_ACTION_DEAL;
     request.symbol = _Symbol;
     request.volume = lotSize;
@@ -339,53 +160,55 @@ bool OpenOrder(ENUM_ORDER_TYPE orderType, double lotSize, double price, double s
     request.comment = "Grid Order";
     request.type_filling = ORDER_FILLING_IOC;
 
+    // Retry mechanism for order placement
     const int maxRetries = 5;
     int retries = 0;
     int waitTime = 2000;
 
     while (retries < maxRetries) {
         if (OrderSend(request, result)) {
-            WriteLog(successLogFile, "Order placed successfully. Order ticket: " + IntegerToString(result.order));
+            WriteLog(successLogFile, "Order placed successfully. Order ticket: " + IntegerToString(result.order), true);
             return true;
         } else {
             int errorCode = GetLastError();
             string errorMsg = "Order placement failed. Error code: " + IntegerToString(errorCode) + ". " + ErrorDescription(errorCode);
             Print(errorMsg);
-            WriteLog(errorLogFile, errorMsg);
+            WriteLog(errorLogFile, errorMsg, true);
 
             retries++;
+            waitTime = waitTime * 2 + (MathRand() % 1000); // Exponential backoff with some randomness
             Sleep(waitTime);
         }
     }
 
-    string errorMsg = "Order placement failed after " + IntegerToString(maxRetries) + " retries.";
-    Print(errorMsg);
-    WriteLog(errorLogFile, errorMsg);
+    // Log final failure after exhausting retries
+    string finalErrorMsg = "Order placement failed after " + IntegerToString(maxRetries) + " retries.";
+    Print(finalErrorMsg);
+    WriteLog(errorLogFile, finalErrorMsg, true);
 
     return false;
 }
 
 //+------------------------------------------------------------------+
-//| Function to modify an order                                        |
+//| Modify an existing order's SL/TP                                 |
 //+------------------------------------------------------------------+
-
 bool ModifyOrder(ulong ticket, double price, double sl, double tp) {
     MqlTradeRequest request;
     MqlTradeResult result;
     ZeroMemory(request);
     ZeroMemory(result);
 
+    // Fill the modification request
     request.action = TRADE_ACTION_SLTP;
     request.symbol = _Symbol;
     request.sl = sl;
     request.tp = tp;
-    request.position = ticket;  // Correctly use 'ticket' to reference the order/position
+    request.deviation = 50;
+    request.order = ticket;
 
-    request.magic = GenerateMagicNumber();
-    request.comment = "Modify Order";
-
+    // Send the modification request
     if (OrderSend(request, result)) {
-        WriteLog(successLogFile, "Order modified successfully. Order ticket: " + IntegerToString(result.order));
+        WriteLog(successLogFile, "Order modified successfully. Order ticket: " + IntegerToString(ticket));
         return true;
     } else {
         int errorCode = GetLastError();
@@ -394,4 +217,66 @@ bool ModifyOrder(ulong ticket, double price, double sl, double tp) {
         WriteLog(errorLogFile, errorMsg);
         return false;
     }
+}
+
+//+------------------------------------------------------------------+
+//| Generate a magic number for orders                               |
+//+------------------------------------------------------------------+
+int GenerateMagicNumber() {
+    if (StringLen(_Symbol) < 6) {
+        Print("Error: Symbol name too short");
+        return -1;
+    }
+
+    long symbolHash = 0;
+    for (int i = 0; i < StringLen(_Symbol); i++) {
+        symbolHash += StringToInteger(StringSubstr(_Symbol, i, 1)) * i;
+    }
+
+    return int(symbolHash) % 10000; // Return a 4-digit magic number
+}
+
+//+------------------------------------------------------------------+
+//| Log function to write messages to a log file                     |
+//+------------------------------------------------------------------+
+void WriteLog(string filename, string message, bool addTimestamp = false) {
+    int handle = FileOpen(filename, FILE_WRITE | FILE_CSV | FILE_ANSI | FILE_COMMON, ';');
+    if (handle != INVALID_HANDLE) {
+        if (addTimestamp) {
+            message = TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES) + " - " + message;
+        }
+        FileWrite(handle, message);
+        FileClose(handle);
+    } else {
+        Print("Failed to open log file: ", filename);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| Error Description helper function                                |
+//+------------------------------------------------------------------+
+string ErrorDescription(int errorCode) {
+    string errorText;
+    switch (errorCode) {
+        case 10004: errorText = "Trade is disabled"; break;
+        case 10006: errorText = "No connection with trade server"; break;
+        case 10007: errorText = "Account is invalid"; break;
+        case 10008: errorText = "Common error"; break;
+        case 10009: errorText = "Trade server is busy"; break;
+        case 10010: errorText = "Old version of the client terminal"; break;
+        case 10011: errorText = "Too many requests"; break;
+        case 10012: errorText = "Request is too frequently sent"; break;
+        case 10013: errorText = "Order send error"; break;
+        case 10014: errorText = "Order modify error"; break;
+        case 10015: errorText = "Order delete error"; break;
+        case 10016: errorText = "Trade context is busy"; break;
+        case 10017: errorText = "Trade timeout"; break;
+        case 10018: errorText = "Trade is forbidden"; break;
+        case 10019: errorText = "Invalid price"; break;
+        case 10020: errorText = "Invalid stops"; break;
+        case 10021: errorText = "Invalid trade volume"; break;
+        case 10022: errorText = "Market is closed"; break;
+        default: errorText = "Unknown error"; break;
+    }
+    return errorText;
 }
