@@ -53,7 +53,7 @@ void OnTick() {
 
     double lastPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID); // Current market price
     double gridDistance = CalculateDynamicGridDistance();     // Calculate dynamic grid distance
-    double tp = EMPTY_VALUE, sl = EMPTY_VALUE;                // Initialize Take Profit and Stop Loss variables
+    double tp = 0, sl = 0;                // Initialize Take Profit and Stop Loss variables
 
     // Modify existing orders' SL and TP if necessary
     for (int i = 0; i < PositionsTotal(); i++) {
@@ -103,8 +103,8 @@ double CalculateDynamicGridDistance() {
 //| Determine Take Profit and Stop Loss levels                       |
 //+------------------------------------------------------------------+
 void DetermineTPAndSL(double& tp, double& sl, double lastPrice, double openPrice) {
-    tp = EMPTY_VALUE;
-    sl = EMPTY_VALUE;
+    tp = 0;
+    sl = 0;
 
     if (UseTakeProfit) {
         tp = lastPrice + DefaultTP * _Point; // Calculate Take Profit level
